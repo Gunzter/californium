@@ -51,7 +51,7 @@ public class ProxyCoapClientResource extends ForwardingResource {
     private String identity; //Identity for DTLS (shared with server) //Rikard
 	private String psk; //PSK for DTLS (shared with server) //Rikard
 	private DTLSConnector dtlsConnector = null;
-	private CoapClient client = null;
+	private CoapClient client = new CoapClient();
 
 	public ProxyCoapClientResource() {
 		this("coapClient");
@@ -154,8 +154,8 @@ public class ProxyCoapClientResource extends ForwardingResource {
 			if(proxyUriString.contains("coaps")) {
                 LOGGER.info("ProxyCoapClient is forwarding a request using DTLS");
                 //Added so DTLS connection is not closed between messages
-                if( dtlsConnector == null && client == null) {
-                		client = new CoapClient();
+                if( dtlsConnector == null ) {
+                		
                 		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();
                         builder.setPskStore(new StaticPskStore(identity, psk.getBytes()));
                         dtlsConnector = new DTLSConnector(builder.build(), null);
@@ -168,11 +168,10 @@ public class ProxyCoapClientResource extends ForwardingResource {
                 
                
                 client.getEndpoint().sendRequest(outgoingRequest);
-        }
-        else {
-                //Else if Proxy-Uri does not specify coaps, send over normal endpoint without DTLS //Rikard
-        	endpointManager.getDefaultEndpoint().sendRequest(outgoingRequest);
-        }
+		     } else {
+		                //Else if Proxy-Uri does not specify coaps, send over normal endpoint without DTLS //Rikard
+		        	endpointManager.getDefaultEndpoint().sendRequest(outgoingRequest);
+		     }
 
 			//endpointManager.getDefaultEndpoint().sendRequest(outgoingRequest);
 		} catch (TranslationException e) {
