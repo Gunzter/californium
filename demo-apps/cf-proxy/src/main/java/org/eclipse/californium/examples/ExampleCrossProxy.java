@@ -20,6 +20,7 @@ import java.io.IOException;
 import org.eclipse.californium.core.CoapResource;
 import org.eclipse.californium.core.CoapServer;
 import org.eclipse.californium.core.network.config.NetworkConfig;
+import org.eclipse.californium.core.server.ServerMessageDeliverer;
 import org.eclipse.californium.core.server.resources.CoapExchange;
 
 import org.eclipse.californium.proxy.DirectProxyCoapResolver;
@@ -47,14 +48,16 @@ public class ExampleCrossProxy {
 	private CoapServer targetServerA;
 	
 	public ExampleCrossProxy() throws IOException {
-		ForwardingResource coap2coap = new ProxyCoapClientResource("coap2coap");
+		//ForwardingResource coap2coap = new ProxyCoapClientResource("coap2coap");
 		ForwardingResource coap2http = new ProxyHttpClientResource("coap2http");
 
 		
 		// Create CoAP Server on PORT with proxy resources form CoAP to CoAP and HTTP
 		targetServerA = new CoapServer(PORT);
-	//	ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
-		targetServerA.add(coap2coap);
+		//ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
+		ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
+		targetServerA.setMessageDeliverer(new ServerMessageDeliverer(coap2coap));
+		//targetServerA.add(coap2coap);
 		targetServerA.add(coap2http);
 		targetServerA.add(new TargetResource("target"));
 		targetServerA.start();
@@ -63,8 +66,8 @@ public class ExampleCrossProxy {
 	//	System.out.println("testr");
 	//	System.out.println(targetServerA.getRoot().getURI());
 		
-		ProxyHttpServer httpServer = new ProxyHttpServer(8080);
-		httpServer.setProxyCoapResolver(new DirectProxyCoapResolver(coap2coap));
+		//ProxyHttpServer httpServer = new ProxyHttpServer(8080);
+		//httpServer.setProxyCoapResolver(new DirectProxyCoapResolver(coap2coap));
 		
 		System.out.println("CoAP resource \"target\" available over HTTP at: http://localhost:8080/proxy/coap://localhost:PORT/target");
 	}

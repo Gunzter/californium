@@ -91,7 +91,6 @@ public class ServerMessageDeliverer implements MessageDeliverer {
 		if (!processed) {
 			Request request = exchange.getRequest();
 			List<String> path = request.getOptions().getUriPath();
-			path.add("coap2coap");
 			final Resource resource = findResource(path);
 			if (resource != null) {
 				checkForObserveOption(exchange, resource);
