@@ -49,13 +49,19 @@ public class ExampleCrossProxy {
 	public ExampleCrossProxy() throws IOException {
 		ForwardingResource coap2coap = new ProxyCoapClientResource("coap2coap");
 		ForwardingResource coap2http = new ProxyHttpClientResource("coap2http");
+
 		
 		// Create CoAP Server on PORT with proxy resources form CoAP to CoAP and HTTP
 		targetServerA = new CoapServer(PORT);
+	//	ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
 		targetServerA.add(coap2coap);
 		targetServerA.add(coap2http);
 		targetServerA.add(new TargetResource("target"));
 		targetServerA.start();
+	//	targetServerA.setMessageDeliverer(null);
+	//	targetServerA.setMessageDeliverer(new ServerMessageDeliverer(targetServerA.getRoot()));
+	//	System.out.println("testr");
+	//	System.out.println(targetServerA.getRoot().getURI());
 		
 		ProxyHttpServer httpServer = new ProxyHttpServer(8080);
 		httpServer.setProxyCoapResolver(new DirectProxyCoapResolver(coap2coap));

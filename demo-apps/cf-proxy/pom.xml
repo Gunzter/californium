@@ -25,10 +25,10 @@
 			<groupId>${project.groupId}</groupId>
 			<artifactId>californium-core</artifactId>
 		</dependency>
-		<dependency>
+	<!-- 	<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>californium-proxy</artifactId>
-		</dependency>
+		</dependency> -->
 	</dependencies>
 
 	<build>
