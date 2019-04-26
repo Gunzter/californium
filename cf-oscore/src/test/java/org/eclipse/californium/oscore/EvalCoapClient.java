@@ -49,8 +49,8 @@ public class EvalCoapClient {
 		
 		
 		String resourceUri = "/test/caps";
-		String proxyUri = "coap://127.0.0.1/coap2coap";
-		CoapClient c = new CoapClient(proxyUri);
+		String uriProxy = "coap://127.0.0.1";
+		CoapClient c = new CoapClient(uriProxy);
 		//CoapClient c = new CoapClient(baseUri + resourceUri);
 		
 	/*	for(int payload_len = 5; payload_len < 125; payload_len += 5) {

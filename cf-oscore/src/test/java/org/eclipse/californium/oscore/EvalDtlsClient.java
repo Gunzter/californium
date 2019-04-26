@@ -28,6 +28,8 @@ import org.eclipse.californium.core.Utils;
 import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.CoAP.Code;
 import org.eclipse.californium.core.network.CoapEndpoint;
+import org.eclipse.californium.examples.CredentialsUtil;
+import org.eclipse.californium.examples.CredentialsUtil.Mode;
 import org.eclipse.californium.scandium.DTLSConnector;
 import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
 import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
@@ -36,7 +38,7 @@ public class EvalDtlsClient {
 
 	public static final List<Mode> SUPPORTED_MODES = Arrays
 			.asList(new Mode[] { Mode.PSK, Mode.RPK, Mode.X509, Mode.RPK_TRUST, Mode.X509_TRUST });
-	private static final String SERVER_URI = "coaps://[fd00::302:304:506:708]/test/caps";
+	//private static final String SERVER_URI = "coaps://[fd00::302:304:506:708]/test/caps";
 
 	private final DTLSConnector dtlsConnector;
 
@@ -46,61 +48,53 @@ public class EvalDtlsClient {
 
 	public void test() {
 		CoapResponse response = null;
-		try {
-			URI uri = new URI(SERVER_URI);
-			String proxyUri = "coaps://127.0.0.1/coap2coap";
-			CoapClient client = new CoapClient(proxyUri);
-			//CoapClient client = new CoapClient(uri);
-			CoapEndpoint.CoapEndpointBuilder builder = new CoapEndpoint.CoapEndpointBuilder();
-			builder.setConnector(dtlsConnector);
-			
-			client.setEndpoint(builder.build());
+		//String proxyUri = "coaps://127.0.0.1/coap2coap";
+		String uriProxy = "coaps://[fd00::302:304:506:708]/test/caps";
+		CoapClient client = new CoapClient(uriProxy);
+		CoapEndpoint.Builder builder = new CoapEndpoint.Builder();
+		builder.setConnector(dtlsConnector);
 		
-			for(int payload_len = 5; payload_len < 125; payload_len += 5) {
-				System.out.println(payload_len);
-				Request r = new Request(Code.POST);
-				byte[] payload = new byte[payload_len];
-				Arrays.fill(payload, (byte)0x61);
-				r.setPayload(payload);
-				r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
-				CoapResponse resp = client.advanced(r);
-				if(resp == null) {
-					System.out.println("ERROR: Client application received no response!");
-					return;
-				}
-				if( resp.getPayload().length != payload_len) {
-					System.out.println("FUCKUP!" + payload_len);
-				}
-			}
-			System.out.println("Done!");
-			
-			/*	Request r = new Request(Code.POST);
-			byte[] payload = {0x61, 0x61, 0x61, 0x61}; 
+		client.setEndpoint(builder.build());
+		for(int payload_len = 5; payload_len < 125; payload_len += 5) {
+			System.out.println(payload_len);
+			Request r = new Request(Code.POST);
+			byte[] payload = new byte[payload_len];
+			Arrays.fill(payload, (byte)0x61);
 			r.setPayload(payload);
+		//	r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
 			CoapResponse resp = client.advanced(r);
-			
-		
-			System.out.println("Original CoAP message:");
-			System.out.println("Uri-Path: " + client.getURI());
-			System.out.println(Utils.prettyPrint(r));
-			System.out.println("");
-
 			if(resp == null) {
 				System.out.println("ERROR: Client application received no response!");
 				return;
 			}
-			
-			System.out.println("Parsed CoAP response: ");
-			System.out.println("Response code:\t" + resp.getCode());
-			System.out.println("Content-Format:\t" + resp.getOptions().getContentFormat());
-			System.out.println("Payload:\t" + resp.getResponseText());
-			*/
-			client.shutdown();
-		
-		} catch (URISyntaxException e) {
-			System.err.println("Invalid URI: " + e.getMessage());
-			System.exit(-1);
+			if( resp.getPayload().length != payload_len) {
+				System.out.println("FUCKUP!" + payload_len);
+			}
 		}
+		System.out.println("Done!");
+		
+		/*	Request r = new Request(Code.POST);
+		byte[] payload = {0x61, 0x61, 0x61, 0x61}; 
+		r.setPayload(payload);
+		CoapResponse resp = client.advanced(r);
+		
+
+		System.out.println("Original CoAP message:");
+		System.out.println("Uri-Path: " + client.getURI());
+		System.out.println(Utils.prettyPrint(r));
+		System.out.println("");
+
+		if(resp == null) {
+			System.out.println("ERROR: Client application received no response!");
+			return;
+		}
+		
+		System.out.println("Parsed CoAP response: ");
+		System.out.println("Response code:\t" + resp.getCode());
+		System.out.println("Content-Format:\t" + resp.getOptions().getContentFormat());
+		System.out.println("Payload:\t" + resp.getResponseText());
+		*/
+		client.shutdown();
 
 	}
 
@@ -109,7 +103,7 @@ public class EvalDtlsClient {
 		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();
 		builder.setClientOnly();
 		builder.setSniEnabled(false);
-		List<Mode> modes = CredentialsUtil.parse(args, CredentialsUtil.DEFAULT_MODES, SUPPORTED_MODES);
+		List<Mode> modes = CredentialsUtil.parse(args, CredentialsUtil.DEFAULT_SERVER_MODES, SUPPORTED_MODES);
 
 		//builder.setPskStore(new StaticPskStore(CredentialsUtil.PSK_IDENTITY, CredentialsUtil.PSK_SECRET));
 		builder.setPskStore(new StaticPskStore("user", "password".getBytes()));
