@@ -16,18 +16,26 @@
 package org.eclipse.californium.examples;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.List;
 
 import org.eclipse.californium.core.CoapResource;
 import org.eclipse.californium.core.CoapServer;
+import org.eclipse.californium.core.network.CoapEndpoint;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.server.ServerMessageDeliverer;
 import org.eclipse.californium.core.server.resources.CoapExchange;
-
+import org.eclipse.californium.examples.CredentialsUtil.Mode;
 import org.eclipse.californium.proxy.DirectProxyCoapResolver;
 import org.eclipse.californium.proxy.ProxyHttpServer;
 import org.eclipse.californium.proxy.resources.ForwardingResource;
 import org.eclipse.californium.proxy.resources.ProxyCoapClientResource;
 import org.eclipse.californium.proxy.resources.ProxyHttpClientResource;
+import org.eclipse.californium.scandium.DTLSConnector;
+import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
+import org.eclipse.californium.scandium.config.DtlsConnectorConfig.Builder;
+import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
 
 /**
  * Http2CoAP: Insert in browser:
@@ -46,28 +54,41 @@ public class ExampleCrossProxy {
 	private static final int PORT = NetworkConfig.getStandard().getInt(NetworkConfig.Keys.COAP_PORT);
 
 	private CoapServer targetServerA;
+	private static String identityClient = "user"; 
+    private static String pskClient = "password"; 
+    private static String identityServer = "user"; 
+    private static String pskServer = "password"; 
+
+   
+    InetSocketAddress localAddressSecure; //Address of DTLS listener 
+	public static final int DTLS_PORT = NetworkConfig.getStandard().getInt(NetworkConfig.Keys.COAP_SECURE_PORT);
+	public static final List<Mode> SUPPORTED_MODES = Arrays
+			.asList(new Mode[] { Mode.PSK, Mode.NO_AUTH });
+	
 	
 	public ExampleCrossProxy() throws IOException {
-		//ForwardingResource coap2coap = new ProxyCoapClientResource("coap2coap");
-		ForwardingResource coap2http = new ProxyHttpClientResource("coap2http");
-
+		
 		
 		// Create CoAP Server on PORT with proxy resources form CoAP to CoAP and HTTP
 		targetServerA = new CoapServer(PORT);
-		//ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
-		ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI());
-		targetServerA.setMessageDeliverer(new ServerMessageDeliverer(coap2coap));
-		//targetServerA.add(coap2coap);
-		targetServerA.add(coap2http);
-		targetServerA.add(new TargetResource("target"));
-		targetServerA.start();
-	//	targetServerA.setMessageDeliverer(null);
-	//	targetServerA.setMessageDeliverer(new ServerMessageDeliverer(targetServerA.getRoot()));
-	//	System.out.println("testr");
-	//	System.out.println(targetServerA.getRoot().getURI());
+		//DTLS initialization
+		localAddressSecure = new InetSocketAddress("0.0.0.0", DTLS_PORT);
+		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();
+		builder.setAddress(new InetSocketAddress(DTLS_PORT));
+		builder.setPskStore(new StaticPskStore(identityClient, pskClient.getBytes()));
+
+		DTLSConnector connector = new DTLSConnector(builder.build());
+		CoapEndpoint.Builder coapBuilder = new CoapEndpoint.Builder();
+		coapBuilder.setConnector(connector);
+		targetServerA.addEndpoint(coapBuilder.build());
+      
 		
-		//ProxyHttpServer httpServer = new ProxyHttpServer(8080);
-		//httpServer.setProxyCoapResolver(new DirectProxyCoapResolver(coap2coap));
+		ForwardingResource coap2coap = new ProxyCoapClientResource(targetServerA.getRoot().getURI(),identityServer, pskServer);
+		targetServerA.setMessageDeliverer(new ServerMessageDeliverer(coap2coap));
+
+		targetServerA.start();
+
+
 		
 		System.out.println("CoAP resource \"target\" available over HTTP at: http://localhost:8080/proxy/coap://localhost:PORT/target");
 	}

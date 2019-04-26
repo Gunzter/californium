@@ -48,20 +48,20 @@ public class EvalDtlsClient {
 
 	public void test() {
 		CoapResponse response = null;
-		//String proxyUri = "coaps://127.0.0.1/coap2coap";
-		String uriProxy = "coaps://[fd00::302:304:506:708]/test/caps";
+		String uriProxy = "coaps://127.0.0.1/";
+		
 		CoapClient client = new CoapClient(uriProxy);
 		CoapEndpoint.Builder builder = new CoapEndpoint.Builder();
 		builder.setConnector(dtlsConnector);
 		
 		client.setEndpoint(builder.build());
-		for(int payload_len = 5; payload_len < 125; payload_len += 5) {
+		for(int payload_len = 5; payload_len < 10; payload_len += 5) {
 			System.out.println(payload_len);
 			Request r = new Request(Code.POST);
 			byte[] payload = new byte[payload_len];
 			Arrays.fill(payload, (byte)0x61);
 			r.setPayload(payload);
-		//	r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
+			r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
 			CoapResponse resp = client.advanced(r);
 			if(resp == null) {
 				System.out.println("ERROR: Client application received no response!");
