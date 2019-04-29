@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LongSummaryStatistics;
 
 import org.eclipse.californium.core.CoapClient;
 import org.eclipse.californium.core.CoapResponse;
@@ -49,20 +50,46 @@ public class EvalDtlsClient {
 	public void test() {
 		CoapResponse response = null;
 		String uriProxy = "coaps://127.0.0.1/";
-		
+		uriProxy =  "coaps://[fd00::212:4b00:14b5:d967]/test/caps";
 		CoapClient client = new CoapClient(uriProxy);
 		CoapEndpoint.Builder builder = new CoapEndpoint.Builder();
 		builder.setConnector(dtlsConnector);
-		
 		client.setEndpoint(builder.build());
-		for(int payload_len = 5; payload_len < 10; payload_len += 5) {
+		
+		Request r = new Request(Code.POST);
+		byte[] payload = new byte[1];
+		Arrays.fill(payload, (byte)0x61);
+		r.setPayload(payload);
+		//r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
+		CoapResponse resp = client.advanced(r);
+		
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		long[] timelist = new long[300];
+		//for(int payload_len = 5; payload_len < 125; payload_len += 5) {
+		for (int i = 0 ; i<300; i++) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			int payload_len = 1;
 			System.out.println(payload_len);
-			Request r = new Request(Code.POST);
-			byte[] payload = new byte[payload_len];
+			r = new Request(Code.POST);
+			payload = new byte[payload_len];
 			Arrays.fill(payload, (byte)0x61);
 			r.setPayload(payload);
-			r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
-			CoapResponse resp = client.advanced(r);
+			//r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
+			long startTime = System.nanoTime();
+			resp = client.advanced(r);
+			long endTime = System.nanoTime();
+			long timeElapsed = endTime - startTime;
+			timelist[i] = timeElapsed;
 			if(resp == null) {
 				System.out.println("ERROR: Client application received no response!");
 				return;
@@ -72,7 +99,15 @@ public class EvalDtlsClient {
 			}
 		}
 		System.out.println("Done!");
-		
+		System.out.println("Results");
+		LongSummaryStatistics stat = new LongSummaryStatistics();
+		for (int i = 0 ; i<300; i++) {
+			System.out.print(timelist[i] / (float)1000000 + " ");
+			stat.accept(timelist[i]);
+		}
+		System.out.println("");
+		System.out.println("avrage "+  stat.getAverage()/(float)1000000);
+		System.out.println("sd "+  calculateSD(timelist)/(float)1000000);
 		/*	Request r = new Request(Code.POST);
 		byte[] payload = {0x61, 0x61, 0x61, 0x61}; 
 		r.setPayload(payload);
@@ -97,7 +132,24 @@ public class EvalDtlsClient {
 		client.shutdown();
 
 	}
+	
+	public static double calculateSD(long numArray[])
+	    {
+	        double sum = 0.0, standardDeviation = 0.0;
+	        int length = numArray.length;
 
+	        for(double num : numArray) {
+	            sum += num;
+	        }
+
+	        double mean = sum/length;
+
+	        for(double num: numArray) {
+	            standardDeviation += Math.pow(num - mean, 2);
+	        }
+
+	        return Math.sqrt(standardDeviation/length);
+	    }
 	public static void main(String[] args) throws InterruptedException {
 
 		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();

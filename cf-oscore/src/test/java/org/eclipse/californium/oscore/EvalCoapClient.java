@@ -36,7 +36,7 @@ import org.eclipse.californium.core.network.config.NetworkConfig;
 public class EvalCoapClient {
 	
 	private final static String baseUri = "coap://[fd00::302:304:506:708]";
-
+//	"coap://[fd00::212:4b00:14b5:d967]"
 	
 	public static void main(String[] args) throws OSException {
 		
@@ -74,7 +74,7 @@ public class EvalCoapClient {
 		Request r = new Request(Code.POST);
 		byte[] payload = {0x61, 0x61, 0x61, 0x61}; 
 		r.setPayload(payload);
-		r.getOptions().setProxyUri("coap://[fd00::302:304:506:708]/test/caps");
+		r.getOptions().setProxyUri("coap://[fd00::212:4b00:14b5:d967]/test/caps");
 		CoapResponse resp = c.advanced(r);
 		
 		System.out.println("Original CoAP message:");
