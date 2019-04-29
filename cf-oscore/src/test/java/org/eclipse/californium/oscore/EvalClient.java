@@ -17,7 +17,9 @@
  ******************************************************************************/
 package org.eclipse.californium.oscore;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LongSummaryStatistics;
 
 import org.eclipse.californium.core.CoapClient;
@@ -40,111 +42,82 @@ import org.eclipse.californium.cose.AlgorithmID;
  * Author: Rikard Höglund
  *
  */
-public class EvalOscoreClient {
+public class EvalClient {
 	
+	public final String testedProtocol = "coap"; //(coap||coaps||oscore)
+	
+	//oscore setup data
 	private final static HashMapCtxDB db = HashMapCtxDB.getInstance();
 	private final static String baseUri = "coap://[fd00::302:304:506:708]";
 	private final static AlgorithmID alg = AlgorithmID.AES_CCM_16_64_128;
 	private final static AlgorithmID kdf = AlgorithmID.HKDF_HMAC_SHA_256;
-
-	private final static byte[] master_secret = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
-			0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
-	private final static byte[] master_salt = { (byte) 0x9e, (byte) 0x7c, (byte) 0xa9, (byte) 0x22, (byte) 0x23,
-			(byte) 0x78, (byte) 0x63, (byte) 0x40 };
+	private final static byte[] master_secret = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
+	private final static byte[] master_salt = { (byte) 0x9e, (byte) 0x7c, (byte) 0xa9, (byte) 0x22, (byte) 0x23, (byte) 0x78, (byte) 0x63, (byte) 0x40 };
 	private final static byte[] sid = { (byte) 0x43 };
 	private final static byte[] rid = { (byte) 0x53 };
+	private final static int numberIterations = 100;
 	
-	private static OSCoreCtx ctx_A;
 	
-	
-	public static void main(String[] args) throws OSException {
-		ctx_A = new OSCoreCtx(master_secret, true, alg, sid, rid, kdf, 32, master_salt, null);
-
-		//Avoid CoAP retransmissions (Should no longer be needed)
-		NetworkConfig config = NetworkConfig.getStandard();
+	public static void main(String[] args) throws OSException, InterruptedException {
+		
+		//OSCORE SETUP
+		NetworkConfig config = NetworkConfig.getStandard();//Avoid CoAP retransmissions (Should no longer be needed)
 		config.setInt(NetworkConfig.Keys.MAX_RETRANSMIT, 0);
-		//Set timeout to be 4 seconds
-		config.setInt(NetworkConfig.Keys.ACK_TIMEOUT, 4000);
-		
-		db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A);
+		config.setInt(NetworkConfig.Keys.ACK_TIMEOUT, 4000);		//Set timeout to be 4 seconds
+		OSCoreCtx ctx_A = new OSCoreCtx(master_secret, true, alg, sid, rid, kdf, 32, master_salt, null);;
+		db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A); 		//contexts for oscore
 		db.addContext(baseUri, ctx_A);
-		//Util.printOSCOREKeyInformation(db, baseUri);
 
-		String resourceUri = "/test/caps";
-		//String proxyUri = "coap://127.0.0.1";
-		String uriProxy = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
-		OscoreClient c = new OscoreClient(uriProxy);
-		//OscoreClient c = new OscoreClient(baseUri + resourceUri);
+		//DTLS SETUP [TODO]
 		
-	/*	for(int payload_len = 5; payload_len < 10; payload_len += 5) {
-			System.out.println(payload_len);
-			Request r = new Request(Code.POST);
-			byte[] payload = new byte[payload_len];
-			Arrays.fill(payload, (byte)0x61);
-			r.setPayload(payload);
-			r.getOptions().setProxyUri("coap://[fd00::302:304:506:708]/test/caps"); //test/caps
-			//r.getOptions().setProxyScheme("/coap2coap");
-			r.setURI("coap://127.0.0.1/coap2coap");
-			CoapResponse resp = c.advanced(r);
-			if(resp == null) {
-				System.out.println("ERROR: Client application received no response!");
-				return;
-			}
-			if( resp.getPayload().length != payload_len) {
-				System.out.println("FUCKUP!" + payload_len);
-
-				
-			}
-			for( int i = 0; i < resp.getPayload().length; i++) {
-				System.out.print(resp.getPayload()[i]);
-			}
-			System.out.println("");	
-		} */
-		
+		//EXPERIMENT SETUP
+		String uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+		CoapClient c = new CoapClient(uriServer);
 		Request r = new Request(Code.POST);
+		
+		//send channel opener
 		byte[] payload = new byte[1];
 		Arrays.fill(payload, (byte)0x61);
 		r.setPayload(payload);
-		//r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
-		CoapResponse resp = c.advanced(r);
+		CoapResponse resp = c.advanced(r); //send request
 		
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		long[] timelist = new long[300];
-		//for(int payload_len = 5; payload_len < 125; payload_len += 5) {
-		for (int i = 0 ; i<300; i++) {
-			try {
+		//wait for a while
+		Thread.sleep(1000);
+	
+		int[] payloadSizes = {1,16,32,48,64,80,96,112,128};
+		HashMap<Integer,ArrayList<Long>> data = new HashMap<Integer,ArrayList<Long>>();
+		
+		for(int payloadSize : payloadSizes) {//try many sizes of payload
+			data.put(payloadSize, new ArrayList<Long>());
+			for (int i = 0 ; i<numberIterations; i++) {//try many times for stistical significance
+			
+				//create request and fill it up
+				r = new Request(Code.POST);
+				payload = new byte[payloadSize];
+				Arrays.fill(payload, (byte)0x61);
+				r.setPayload(payload);
+				
+				//send request and measure response time
+				long startTime = System.nanoTime();
+				resp = c.advanced(r);
+				long endTime = System.nanoTime();
+				long timeElapsed = endTime - startTime;
+				
+				data.get(payloadSize).add(timeElapsed);
+				if(resp == null) {
+					System.out.println("ERROR: Client application received no response!");
+					return;
+				}
+				if( resp.getPayload().length != payloadSize) {
+					System.out.println("FUCKUP!" + payloadSize);
+				}
+				
 				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
 			}
-			int payload_len = 1;
-			System.out.println(payload_len);
-			r = new Request(Code.POST);
-			payload = new byte[payload_len];
-			Arrays.fill(payload, (byte)0x61);
-			r.setPayload(payload);
-			//r.getOptions().setProxyUri("coaps://[fd00::302:304:506:708]/test/caps");
-			long startTime = System.nanoTime();
-			resp = c.advanced(r);
-			long endTime = System.nanoTime();
-			long timeElapsed = endTime - startTime;
-			timelist[i] = timeElapsed;
-			if(resp == null) {
-				System.out.println("ERROR: Client application received no response!");
-				return;
-			}
-			if( resp.getPayload().length != payload_len) {
-				System.out.println("FUCKUP!" + payload_len);
-			}
+			
 		}
-		System.out.println("Done!");
-		System.out.println("Results");
+		System.out.println(data.toString());
+		/*
 		LongSummaryStatistics stat = new LongSummaryStatistics();
 		for (int i = 0 ; i<300; i++) {
 			System.out.print(timelist[i] / (float)1000000 + " ");
@@ -158,27 +131,9 @@ public class EvalOscoreClient {
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
-	/*	Request r = new Request(Code.POST);
-		byte[] payload = {0x61, 0x61, 0x61, 0x61}; 
-		r.setPayload(payload);
-		
-		CoapResponse resp = c.advanced(r);
-		
-		System.out.println("Original CoAP message:");
-		System.out.println("Uri-Path: " + c.getURI());
-		System.out.println(Utils.prettyPrint(r));
-		System.out.println("");
-		
-		if(resp == null) {
-			System.out.println("ERROR: Client application received no response!");
-			return;
-		}
-		
-		System.out.println("Parsed CoAP response: ");
-		System.out.println("Response code:\t" + resp.getCode());
-		System.out.println("Content-Format:\t" + resp.getOptions().getContentFormat());
-		System.out.println("Payload:\t" + resp.getResponseText()); */
+		} 
+		*/
+	
 	}
 
 	public static double calculateSD(long numArray[])
