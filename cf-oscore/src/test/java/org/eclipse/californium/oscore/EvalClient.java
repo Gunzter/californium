@@ -50,7 +50,7 @@ import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
  */
 public class EvalClient {
 	
-	public final static String testedProtocol = "coaps"; //(coap||coaps||oscore)
+	public final static String testedProtocol = "oscore"; //(coap||coaps||oscore)
 	
 	//oscore setup data
 	private final static HashMapCtxDB db = HashMapCtxDB.getInstance();
@@ -81,6 +81,7 @@ public class EvalClient {
 		//EXPERIMENT SETUP
 		String uriServer = null;
 		CoapClient c = null;
+		Request r = new Request(Code.POST);
 		switch (testedProtocol) {
 			case "coap":
 				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
@@ -93,13 +94,15 @@ public class EvalClient {
 			break;
 			case "oscore":
 				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+				OSCoreCoapStackFactory.useAsDefault();
+				c = new CoapClient(uriServer);
+				r.getOptions().setOscore(new byte[0]);
 				break;
 			default:
 				throw new Exception();
 		}
 		
-		Request r = new Request(Code.POST);
-		
+
 		//send channel opener
 		byte[] payload = new byte[1];
 		Arrays.fill(payload, (byte)0x61);
@@ -118,6 +121,9 @@ public class EvalClient {
 			
 				//create request and fill it up
 				r = new Request(Code.POST);
+				if(testedProtocol.equals("oscore")) {
+					r.getOptions().setOscore(new byte[0]);
+				}
 				payload = new byte[payloadSize];
 				Arrays.fill(payload, (byte)0x61);
 				r.setPayload(payload);
@@ -167,72 +173,6 @@ public class EvalClient {
 		
 		return client;
 		
-	}
-	
-	/**
-	 * Separate class to handle an OSCORE client instance
-	 * 
-	 * @author segrid-2
-	 *
-	 */
-	public static class OscoreClient
-	{
-		private String uri;
-		private Code method;
-		
-		public CoapClient c;
-		
-		public OscoreClient(Code method, String uri)
-		{	
-			OSCoreCoapStackFactory.useAsDefault();
-			c = new CoapClient(uri);
-			
-			this.method = method;
-			this.uri = uri;
-		}
-		
-		public OscoreClient(String uri)
-		{
-			this(null, uri);
-		}
-		
-		public String getURI() {
-			return uri;
-		}
-		
-		/**
-		 * Send a CoapRequest via OSCORE
-		 * 
-		 * @return Response to CoAP request
-		 */
-		CoapResponse send()
-		{
-			OSCoreCoapStackFactory.useAsDefault();
-			CoapClient c = new CoapClient(uri);
-
-			Request r = new Request(method);
-			r.getOptions().setOscore(new byte[0]);
-			CoapResponse resp = c.advanced(r);
-			
-			return resp;
-		}
-		
-		/**
-		 * Sends an arbitrary CoAP request using OSCORE
-		 * 
-		 * @return Response to CoAP request
-		 */
-		CoapResponse advanced(Request r)
-		{
-			if(!r.getOptions().hasOscore()) {
-				r.getOptions().setOscore(new byte[0]);
-			}
-			CoapResponse resp = c.advanced(r);
-			
-			return resp;
-			
-		}
-
 	}
 
 }
