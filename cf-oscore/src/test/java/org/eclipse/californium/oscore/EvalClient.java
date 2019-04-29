@@ -20,6 +20,7 @@ package org.eclipse.californium.oscore;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.LongSummaryStatistics;
 
 import org.eclipse.californium.core.CoapClient;
@@ -32,6 +33,11 @@ import org.eclipse.californium.core.network.CoapEndpoint;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 
 import org.eclipse.californium.cose.AlgorithmID;
+import org.eclipse.californium.examples.CredentialsUtil;
+import org.eclipse.californium.examples.CredentialsUtil.Mode;
+import org.eclipse.californium.scandium.DTLSConnector;
+import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
+import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
 
 /**
  * OSCORE Client for interop testing
@@ -44,7 +50,7 @@ import org.eclipse.californium.cose.AlgorithmID;
  */
 public class EvalClient {
 	
-	public final String testedProtocol = "coap"; //(coap||coaps||oscore)
+	public final static String testedProtocol = "coaps"; //(coap||coaps||oscore)
 	
 	//oscore setup data
 	private final static HashMapCtxDB db = HashMapCtxDB.getInstance();
@@ -57,8 +63,11 @@ public class EvalClient {
 	private final static byte[] rid = { (byte) 0x53 };
 	private final static int numberIterations = 100;
 	
+	//DTLS setup data
+	public static final List<Mode> SUPPORTED_MODES = Arrays
+			.asList(new Mode[] { Mode.PSK, Mode.RPK, Mode.X509, Mode.RPK_TRUST, Mode.X509_TRUST });
 	
-	public static void main(String[] args) throws OSException, InterruptedException {
+	public static void main(String[] args) throws Exception {
 		
 		//OSCORE SETUP
 		NetworkConfig config = NetworkConfig.getStandard();//Avoid CoAP retransmissions (Should no longer be needed)
@@ -68,11 +77,27 @@ public class EvalClient {
 		db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A); 		//contexts for oscore
 		db.addContext(baseUri, ctx_A);
 
-		//DTLS SETUP [TODO]
 		
 		//EXPERIMENT SETUP
-		String uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
-		CoapClient c = new CoapClient(uriServer);
+		String uriServer = null;
+		CoapClient c = null;
+		switch (testedProtocol) {
+			case "coap":
+				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+				c = new CoapClient(uriServer);
+			break;
+			case "coaps":
+				uriServer = "coaps://[fd00::212:4b00:14b5:d967]/test/caps";
+				c = new CoapClient(uriServer);
+				c = setupDTLS(c);
+			break;
+			case "oscore":
+				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+				break;
+			default:
+				throw new Exception();
+		}
+		
 		Request r = new Request(Code.POST);
 		
 		//send channel opener
@@ -110,6 +135,7 @@ public class EvalClient {
 				}
 				if( resp.getPayload().length != payloadSize) {
 					System.out.println("FUCKUP!" + payloadSize);
+					return;
 				}
 				
 				Thread.sleep(100);
@@ -117,44 +143,31 @@ public class EvalClient {
 			
 		}
 		System.out.println(data.toString());
-		/*
-		LongSummaryStatistics stat = new LongSummaryStatistics();
-		for (int i = 0 ; i<300; i++) {
-			System.out.print(timelist[i] / (float)1000000 + " ");
-			stat.accept(timelist[i]);
-		}
-		System.out.println("");
-		System.out.println("avrage "+  stat.getAverage()/(float)1000000);
-		System.out.println("sd "+  calculateSD(timelist)/(float)1000000);
-		try {
-			Thread.sleep(100000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} 
-		*/
+
 	
 	}
 
-	public static double calculateSD(long numArray[])
-    {
-        double sum = 0.0, standardDeviation = 0.0;
-        int length = numArray.length;
+	private static CoapClient setupDTLS(CoapClient client) {
+		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();
+		builder.setClientOnly();
+		builder.setSniEnabled(false);
+		List<Mode> modes = CredentialsUtil.parse(new String[0], CredentialsUtil.DEFAULT_SERVER_MODES, SUPPORTED_MODES);
 
-        for(double num : numArray) {
-            sum += num;
-        }
+		
+		builder.setPskStore(new StaticPskStore("user", "password".getBytes()));
+		System.out.println("PSK ID " + "user" + " PSK-secret " + "password".getBytes());
 
-        double mean = sum/length;
+		CredentialsUtil.setupCredentials(builder, CredentialsUtil.CLIENT_NAME, modes);
+		DTLSConnector dtlsConnector = new DTLSConnector(builder.build());
 
-        for(double num: numArray) {
-            standardDeviation += Math.pow(num - mean, 2);
-        }
 
-        return Math.sqrt(standardDeviation/length);
-    }
-
-	
+		CoapEndpoint.Builder coapBuilder = new CoapEndpoint.Builder();
+		coapBuilder.setConnector(dtlsConnector);
+		client.setEndpoint(coapBuilder.build());
+		
+		return client;
+		
+	}
 	
 	/**
 	 * Separate class to handle an OSCORE client instance
