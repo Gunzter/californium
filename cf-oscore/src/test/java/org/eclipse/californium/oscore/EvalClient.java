@@ -51,10 +51,11 @@ import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
 public class EvalClient {
 	
 	public final static String testedProtocol = "oscore"; //(coap||coaps||oscore)
-	
+	public final static String serverAddress = "[fd00::302:304:506:708]"; //native contikie 
+	//public final static String serverAddress = "[fd00::212:4b00:14b5:d967]"; //contiki board
 	//oscore setup data
 	private final static HashMapCtxDB db = HashMapCtxDB.getInstance();
-	private final static String baseUri = "coap://[fd00::302:304:506:708]";
+	//private final static String baseUri = "coap://[fd00::302:304:506:708]";
 	private final static AlgorithmID alg = AlgorithmID.AES_CCM_16_64_128;
 	private final static AlgorithmID kdf = AlgorithmID.HKDF_HMAC_SHA_256;
 	private final static byte[] master_secret = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
@@ -73,9 +74,11 @@ public class EvalClient {
 		NetworkConfig config = NetworkConfig.getStandard();//Avoid CoAP retransmissions (Should no longer be needed)
 		config.setInt(NetworkConfig.Keys.MAX_RETRANSMIT, 0);
 		config.setInt(NetworkConfig.Keys.ACK_TIMEOUT, 4000);		//Set timeout to be 4 seconds
-		OSCoreCtx ctx_A = new OSCoreCtx(master_secret, true, alg, sid, rid, kdf, 32, master_salt, null);;
-		db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A); 		//contexts for oscore
-		db.addContext(baseUri, ctx_A);
+		OSCoreCtx ctx_A = new OSCoreCtx(master_secret, true, alg, sid, rid, kdf, 32, master_salt, null);
+		ctx_A.setSenderSeq(254);
+		//db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A); 		//contexts for oscore
+		db.addContext("coap://"+serverAddress, ctx_A); 		//contexts for oscore
+
 
 		
 		//EXPERIMENT SETUP
@@ -84,16 +87,16 @@ public class EvalClient {
 		Request r = new Request(Code.POST);
 		switch (testedProtocol) {
 			case "coap":
-				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+				uriServer = "coap://"+serverAddress +"/test/caps";
 				c = new CoapClient(uriServer);
 			break;
 			case "coaps":
-				uriServer = "coaps://[fd00::212:4b00:14b5:d967]/test/caps";
+				uriServer = "coaps://" + serverAddress + "/test/caps";
 				c = new CoapClient(uriServer);
 				c = setupDTLS(c);
 			break;
 			case "oscore":
-				uriServer = "coap://[fd00::212:4b00:14b5:d967]/test/caps";
+				uriServer = "coap://"+serverAddress +"/test/caps";
 				OSCoreCoapStackFactory.useAsDefault();
 				c = new CoapClient(uriServer);
 				r.getOptions().setOscore(new byte[0]);
