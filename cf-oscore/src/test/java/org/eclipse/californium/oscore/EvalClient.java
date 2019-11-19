@@ -39,6 +39,9 @@ import org.eclipse.californium.scandium.DTLSConnector;
 import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
 import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 /**
  * OSCORE Client for interop testing
  * 
@@ -50,9 +53,10 @@ import org.eclipse.californium.scandium.dtls.pskstore.StaticPskStore;
  */
 public class EvalClient {
 	
-	public final static String testedProtocol = "oscore"; //(coap||coaps||oscore)
+	public final static String testedProtocol = "coaps"; //(coap||coaps||oscore)
 	public final static String serverAddress = "[fd00::302:304:506:708]"; //native contikie 
 	//public final static String serverAddress = "[fd00::212:4b00:14b5:d967]"; //contiki board
+	public final static String proxyAddress = "127.0.0.1"; 
 	//oscore setup data
 	private final static HashMapCtxDB db = HashMapCtxDB.getInstance();
 	//private final static String baseUri = "coap://[fd00::302:304:506:708]";
@@ -62,7 +66,7 @@ public class EvalClient {
 	private final static byte[] master_salt = { (byte) 0x9e, (byte) 0x7c, (byte) 0xa9, (byte) 0x22, (byte) 0x23, (byte) 0x78, (byte) 0x63, (byte) 0x40 };
 	private final static byte[] sid = { (byte) 0x43 };
 	private final static byte[] rid = { (byte) 0x53 };
-	private final static int numberIterations = 100;
+	private final static int numberIterations = 1;
 	
 	//DTLS setup data
 	public static final List<Mode> SUPPORTED_MODES = Arrays
@@ -75,10 +79,8 @@ public class EvalClient {
 		config.setInt(NetworkConfig.Keys.MAX_RETRANSMIT, 0);
 		config.setInt(NetworkConfig.Keys.ACK_TIMEOUT, 4000);		//Set timeout to be 4 seconds
 		OSCoreCtx ctx_A = new OSCoreCtx(master_secret, true, alg, sid, rid, kdf, 32, master_salt, null);
-		ctx_A.setSenderSeq(254);
 		//db.addContext("coap://[fd00::212:4b00:14b5:d967]", ctx_A); 		//contexts for oscore
-		db.addContext("coap://"+serverAddress, ctx_A); 		//contexts for oscore
-
+		db.addContext("coap://"+proxyAddress, ctx_A); 		//contexts for oscore
 
 		
 		//EXPERIMENT SETUP
@@ -86,20 +88,24 @@ public class EvalClient {
 		CoapClient c = null;
 		Request r = new Request(Code.POST);
 		switch (testedProtocol) {
+
 			case "coap":
-				uriServer = "coap://"+serverAddress +"/test/caps";
+				uriServer = "coap://"+proxyAddress; 
+				r.getOptions().setProxyUri("coap://" + serverAddress + "/test/caps");
 				c = new CoapClient(uriServer);
 			break;
 			case "coaps":
-				uriServer = "coaps://" + serverAddress + "/test/caps";
+				uriServer = "coaps://" + proxyAddress;
 				c = new CoapClient(uriServer);
+				r.getOptions().setProxyUri("coaps://" + serverAddress + "/test/caps");
 				c = setupDTLS(c);
 			break;
 			case "oscore":
-				uriServer = "coap://"+serverAddress +"/test/caps";
+				uriServer = "coap://"+proxyAddress;
 				OSCoreCoapStackFactory.useAsDefault();
 				c = new CoapClient(uriServer);
 				r.getOptions().setOscore(new byte[0]);
+				r.getOptions().setProxyUri("coap://" + serverAddress + "/test/caps");
 				break;
 			default:
 				throw new Exception();
@@ -109,15 +115,16 @@ public class EvalClient {
 		//send channel opener
 		byte[] payload = new byte[1];
 		Arrays.fill(payload, (byte)0x61);
-		r.setPayload(payload);
+		r.setPayload(payload); 
 		CoapResponse resp = c.advanced(r); //send request
-		
+
 		//wait for a while
 		Thread.sleep(1000);
 	
-		int[] payloadSizes = {1,16,32,48,64,80,96,112,128};
+		int[] payloadSizes = {1,16,32,48,64,80,96,112,128}; 
 		HashMap<Integer,ArrayList<Long>> data = new HashMap<Integer,ArrayList<Long>>();
-		
+		int errors = 0;
+		//getStat(c);
 		for(int payloadSize : payloadSizes) {//try many sizes of payload
 			data.put(payloadSize, new ArrayList<Long>());
 			for (int i = 0 ; i<numberIterations; i++) {//try many times for stistical significance
@@ -127,6 +134,12 @@ public class EvalClient {
 				if(testedProtocol.equals("oscore")) {
 					r.getOptions().setOscore(new byte[0]);
 				}
+				if(testedProtocol.equals("coaps")) {
+					r.getOptions().setProxyUri("coaps://" + serverAddress + "/test/caps");
+				} else {
+					r.getOptions().setProxyUri("coap://" + serverAddress + "/test/caps");
+				}
+				
 				payload = new byte[payloadSize];
 				Arrays.fill(payload, (byte)0x61);
 				r.setPayload(payload);
@@ -142,20 +155,44 @@ public class EvalClient {
 					System.out.println("ERROR: Client application received no response!");
 					return;
 				}
+
 				if( resp.getPayload().length != payloadSize) {
 					System.out.println("FUCKUP!" + payloadSize);
-					return;
+
+					errors++;
 				}
 				
 				Thread.sleep(100);
 			}
-			
+			//getStat(c);
 		}
-		System.out.println(data.toString());
-
-	
+		
+		
+		Gson gson = new GsonBuilder().create();
+		String json = gson.toJson(data);
+		System.out.println("missed messages " +  errors);
+		System.out.println(json);
 	}
 
+	private static void getStat(CoapClient c) {
+		CoapClient borderClient = new CoapClient();
+		Request brStatRequest = new Request(Code.GET);
+		Request serverStatRequest = new Request(Code.GET);
+		brStatRequest.setURI("coap://[fd00::212:4b00:14b5:d96f]/stat");
+		
+		if(testedProtocol.equals("coaps")) {
+			serverStatRequest.getOptions().setProxyUri("coaps://[fd00::212:4b00:14b5:d967]/stat");
+		} else if(testedProtocol.equals("oscore")){
+			serverStatRequest.getOptions().setProxyUri("coap://[fd00::212:4b00:14b5:d967]/stat");
+			serverStatRequest.getOptions().setOscore(new byte[0]);
+		}else {
+			serverStatRequest.getOptions().setProxyUri("coap://[fd00::212:4b00:14b5:d967]/stat");
+		}
+		
+		CoapResponse statResp = borderClient.advanced(brStatRequest);	
+		CoapResponse statResp2 = c.advanced(serverStatRequest);
+	}
+	
 	private static CoapClient setupDTLS(CoapClient client) {
 		DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder();
 		builder.setClientOnly();
